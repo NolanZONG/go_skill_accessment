@@ -9,7 +9,10 @@ const handleLogin = asyncHandler(async (req, res) => {
     clearAllCookies(res);
     setAllCookies(res, accessToken, refreshToken, csrfToken);
 
-    res.json(accountBasic);
+    // accessToken/csrfToken are also returned in the body so server-to-server
+    // callers can authenticate via Authorization: Bearer without parsing
+    // Set-Cookie headers. Browser frontend ignores the extra fields.
+    res.json({ ...accountBasic, accessToken, csrfToken });
 });
 
 const handleLogout = asyncHandler(async (req, res) => {
