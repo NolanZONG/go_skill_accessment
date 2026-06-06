@@ -1,0 +1,147 @@
+openapi: 3.1.0
+info:
+  title: Go Service - Student Report Generation
+  version: 1.0.0
+  description: |
+    Generates a PDF report for a single student. The service fetches the
+    student information from the upstream school-mgmt backend, renders an A4 PDF
+    via maroto/v2, persists it under `OUTPUT_DIR/student_{id}.pdf`, and
+    streams the same bytes back in the HTTP response.
+
+    Concurrent requests for the same student id are coalesced via
+    singleflight: only one backend fetch and one PDF render run; every caller
+    receives the same response.
+
+servers:
+  - url: http://localhost:8080
+    description: Local Docker Compose (host port 8080 -> container 80)
+  - url: http://go-service
+    description: Inside the school-mgmt-network Docker network (port 80)
+
+paths:
+  /healthz:
+    get:
+      summary: Liveness probe.
+      tags: [internal]
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/students/{id}/report:
+    get:
+      summary: Generate and download a student PDF report.
+      description: |
+        Returns the PDF report for the requested student id. The same bytes are
+        also written to `OUTPUT_DIR/student_{id}.pdf` on the service filesystem
+        and the absolute path is echoed back via the `X-Pdf-Path` response
+        header.
+      tags: [reports]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          description: Positive integer student id, matching the backend's `users.id`.
+          schema:
+            type: integer
+            format: int64
+            minimum: 1
+            example: 6
+      responses:
+        "200":
+          description: PDF report generated successfully.
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: Always `attachment; filename="student_{id}.pdf"`.
+            X-Pdf-Path:
+              schema:
+                type: string
+              description: Absolute path where the PDF was persisted on the service filesystem.
+            X-Request-ID:
+              schema:
+                type: string
+              description: Echoed request id; auto-generated if not supplied.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: The path parameter is not a positive integer.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: INVALID_ID
+                message: path id "abc" must be a positive integer
+        "404":
+          description: The backend reported no student with that id.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: STUDENT_NOT_FOUND
+                message: student not found
+        "502":
+          description: The upstream backend returned a non-recoverable failure or unexpected response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                unavailable:
+                  value:
+                    code: BACKEND_UNAVAILABLE
+                    message: failed to reach the upstream backend service
+                auth:
+                  value:
+                    code: BACKEND_AUTH_FAILED
+                    message: upstream authentication failed
+        "503":
+          description: The circuit breaker tripped after repeated upstream failures.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: BACKEND_BREAKER_OPEN
+                message: backend is temporarily unavailable; please retry later
+        "504":
+          description: The upstream backend did not respond within `REQUEST_TIMEOUT`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: BACKEND_TIMEOUT
+                message: upstream did not respond in time
+        "500":
+          description: Unhandled server-side error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+components:
+  schemas:
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Stable, machine-readable error code.
+        message:
+          type: string
+          description: Human-readable description of the error.

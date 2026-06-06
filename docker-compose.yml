@@ -69,9 +69,37 @@ services:
     networks:
       - school-mgmt-network
 
+  go-service:
+    image: school-mgmt-go-service:latest
+    container_name: school-mgmt-go-service
+    build:
+      context: ./Go-service
+    depends_on:
+      - backend
+    environment:
+      PORT: "80"
+      BACKEND_BASE_URL: http://backend:5007
+      BACKEND_ADMIN_USERNAME: admin@school-admin.com
+      BACKEND_ADMIN_PASSWORD: 3OU4zn3q6Zh9
+      OUTPUT_DIR: /app/output
+      REQUEST_TIMEOUT: 8s
+      LOGIN_TIMEOUT: 5s
+      BREAKER_INTERVAL: 30s
+      BREAKER_TIMEOUT: 20s
+      SHUTDOWN_TIMEOUT: 15s
+      LOG_LEVEL: info
+    ports:
+      - "8080:80"
+    volumes:
+      - go-service-pdf:/app/output
+    networks:
+      - school-mgmt-network
+
 volumes:
   pgdata:
     name: school-mgmt-pgdata
+  go-service-pdf:
+    name: school-mgmt-go-pdf
 
 networks:
   school-mgmt-network:

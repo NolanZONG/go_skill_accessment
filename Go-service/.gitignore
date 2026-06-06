@@ -1,0 +1,11 @@
+/output/*.pdf
+/output/*.tmp
+*.exe
+*.test
+*.prof
+/bin/
+/dist/
+.env
+.env.local
+coverage.out
+coverage.html
