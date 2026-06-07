@@ -42,7 +42,7 @@ school-mgmt-frontend     school-mgmt-frontend:latest     "/docker-entrypoint.…
 school-mgmt-go-service   school-mgmt-go-service:latest   "/app/go-service"         go-service   23 minutes ago   Up 11 seconds             0.0.0.0:8080->80/tcp, [::]:8080->80/tcp
 ```
 ### Generated PDF
-[`student_4.pdf`](./student_4.pdf)
+[`student_4.pdf`](./student_report_4.pdf)
 
 ## 📁 Project Structure
 
@@ -59,9 +59,11 @@ go_skill_accessment/
 ## 📝 What I Did On the Top Of The Original Codebase
 
 ### PR
+Please see the PR for all changes
+- https://github.com/NolanZONG/go_skill_accessment/pull/1/changes
 
 ### Fix Issues
-#### Implemented missiong CRUD operations for student management backend API (Known Issue #1)
+#### Implemented missing CRUD operations for student management backend API (Known Issue #1)
 All five handlers in `backend/src/modules/students/students-controller.js` were empty. Implemented them following the same pattern as `staffs-controller.js`.
 
 #### Fixed Notice Description Not Saving (Known Issue #2)
@@ -74,7 +76,7 @@ but the zod schema and the backend repository expected `description`.
 Renamed both occurrences to `description`. 
 As a side benefit, `npm run build` (which runs `tsc` before `vite build`) now passes inside the Docker image.
 
-### Authentication for service-to-service integration (new)
+### Authentication for service-to-service integration
 #### Problem
 In the original codebase, the backend `ONLY` supports a cookie-based auth flow built for a browser frontend: login sets three cookies (`accessToken`, `refreshToken`, `csrfToken`) and every protected route requires both `authenticateToken` (which reads access + refresh cookies) and `csrfProtection` (which compares the `x-csrf-token` header against an HMAC embedded inside the access token JWT). 
 
@@ -85,11 +87,11 @@ The `README` claimed "JWT authentication" but in practice the JWT was never expo
 #### Solution
 To make the API usable for the Go-service without breaking the browser frontend, I updated several parts: 
 
-- `backend/src/middlewares/authenticate-token.js`: accepts an `Authorization: Bearer <jwt>` header as an alternative to the cookie pair. When this path is taken the middleware sets `req.isBearerAuth = true` so downstream middlewares can detect it. The original cookie-based branch is preserved unchanged for the browser.
-- `backend/src/middlewares/csrf-protection.js`: short-circuits and calls `next()` when `req.isBearerAuth` is true. CSRF is a defence against the browser auto-attaching cookies cross-origin; an `Authorization` header is never auto-attached, so the attack vector does not exist on the Bearer path.
+- `backend/src/middlewares/authenticate-token.js`: accepts an `Authorization: Bearer <jwt>` header as an alternative to the cookie pair. When there is a bearer token in the request header, then it sets `req.isBearerAuth = true` so downstream middlewares can detect it. The original cookie-based branch is preserved unchanged for the browser.
+- `backend/src/middlewares/csrf-protection.js`: short-circuits and calls `next()` when `req.isBearerAuth` is true.
 - `backend/src/modules/auth/auth-controller.js`: `handleLogin` now also returns `accessToken` and `csrfToken` in the JSON response body alongside `accountBasic`. The cookie path is unchanged (browser ignores the extra fields), but a service caller can now grab the token without parsing `Set-Cookie` headers.
 
-After these changes, the Go-service can authenticate in two HTTP calls without any cookie machinery:
+After these changes, the Go-service can authenticate in two HTTP calls without any cookie machinery.
 
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:5007/api/v1/auth/login \
@@ -102,7 +104,7 @@ curl http://localhost:5007/api/v1/students/6 -H "Authorization: Bearer $TOKEN"
 
 #### Notes
 - Bearer requests verify the JWT with the same `JWT_ACCESS_TOKEN_SECRET` as cookie requests, so the trust model is unchanged.
-- The CSRF bypass relies heavily on the presence of the `Authorization` request header. The Two paths will never interfere with each other.
+- The CSRF bypass relies heavily on the presence of the `Authorization` request header. The two paths will never interfere with each other.
 
 ### Demo data
 
